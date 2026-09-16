@@ -32,6 +32,12 @@ path = "async-epoll"
 ipkg = "async-epoll.ipkg"
 test = "test/test.ipkg"
 
+[custom.all.async-kqueue]
+type = "local"
+path = "async-kqueue"
+ipkg = "async-kqueue.ipkg"
+test = "test/test.ipkg"
+
 [custom.all.async-docs]
 type = "local"
 path = "docs"
