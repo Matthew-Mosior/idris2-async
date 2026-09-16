@@ -1,2 +1,6 @@
 build/
+support/*.d
+support/*.o
+support/*.so
+support/*.dylib
 *.*~
