@@ -7,7 +7,6 @@ version    = 0.1.0
 sourcedir  = "src"
 depends    = base
            , async-posix
-           , cptr
            , elab-util
            , posix
            , ref1
