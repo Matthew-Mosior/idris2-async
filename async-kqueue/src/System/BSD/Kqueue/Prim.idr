@@ -1,0 +1,173 @@
+module System.BSD.Kqueue.Prim
+
+import Data.C.Array
+import Data.C.Ptr
+
+import System.Clock
+import System.Posix.Timer.Prim
+
+import public System.BSD.Kqueue.Flags
+import public System.BSD.Kqueue.Struct
+import public System.Posix.File.Prim
+
+%default total
+
+--------------------------------------------------------------------------------
+-- FFI
+--------------------------------------------------------------------------------
+
+||| Raw binding to `kqueue(2)`.
+|||
+||| The C support function returns the newly created descriptor on success
+||| and the negated `errno` value on failure.
+%foreign "C:kp_kqueue_create,kqueue-idris"
+prim__kqueue_create : PrimIO CInt
+
+||| Raw binding used to close a kqueue descriptor.
+|||
+||| The C support function returns zero on success and the negated `errno`
+||| value on failure.
+%foreign "C:kp_kqueue_close,kqueue-idris"
+prim__kqueue_close : Bits32 -> PrimIO CInt
+
+||| Submit a single kqueue registration change.
+|||
+||| The arguments are the kqueue descriptor, event identifier, native
+||| `EVFILT_*` value, and native `EV_*` registration flags.
+|||
+||| The C support function returns zero on success and the negated `errno`
+||| value on failure.
+%foreign "C:kp_kevent_ctl,kqueue-idris"
+prim__kevent_ctl :
+     Bits32
+  -> Bits64
+  -> Int16
+  -> Bits16
+  -> PrimIO CInt
+
+||| Wait for events on a kqueue descriptor.
+|||
+||| The event pointer refers to storage for `nevents` native
+||| `struct kevent` values. The final argument points to a native
+||| `struct timespec`.
+|||
+||| The C support function returns the number of events written on success
+||| and the negated `errno` value on failure.
+%foreign "C__collect_safe:kp_kevent_wait,kqueue-idris"
+prim__kevent_wait :
+     Bits32
+  -> AnyPtr
+  -> Bits32
+  -> AnyPtr
+  -> PrimIO CInt
+
+--------------------------------------------------------------------------------
+-- Queue management
+--------------------------------------------------------------------------------
+
+||| Open a new kqueue descriptor.
+|||
+||| Errors from `kqueue(2)` are represented using the standard `EPrim`
+||| error channel.
+export %inline
+kqueueCreate : EPrim Kqueuefd
+kqueueCreate =
+  toVal cast prim__kqueue_create
+
+||| Close a kqueue descriptor.
+|||
+||| Closing the descriptor also removes all registrations belonging to
+||| that kqueue instance.
+export %inline
+kqueueClose : Kqueuefd -> EPrim ()
+kqueueClose kq =
+  toUnit $ prim__kqueue_close (kqueueFd kq)
+
+--------------------------------------------------------------------------------
+-- Registration
+--------------------------------------------------------------------------------
+
+||| Add or remove a filter registration from a kqueue instance.
+|||
+||| Kqueue registrations are identified by the pair `(ident, filter)`.
+||| Unlike epoll, read and write readiness are therefore separate
+||| registrations for the same file descriptor.
+export %inline
+kqueueCtl :
+     {auto ifd : FileDesc f}
+  -> Kqueuefd
+  -> KqueueOp
+  -> (fd : f)
+  -> Filter
+  -> EPrim ()
+kqueueCtl kq op fd flt =
+  toUnit $
+    prim__kevent_ctl
+      (kqueueFd kq)
+      (cast $ fileDesc fd)
+      (filterCode flt)
+      (opCode op)
+
+--------------------------------------------------------------------------------
+-- Waiting
+--------------------------------------------------------------------------------
+
+||| Wait for events on a kqueue descriptor.
+|||
+||| The supplied C array is used directly as the output event buffer for
+||| `kevent(2)`. The dependent pair returned on success contains the number
+||| of valid events written by the kernel together with the same backing
+||| array restricted to that logical event count.
+|||
+||| A duration of zero performs a non-blocking poll.
+export
+kqueueWait :
+     {n : _}
+  -> Kqueuefd
+  -> CArrayIO n SKevent
+  -> Clock Duration
+  -> EPrim (k ** CArrayIO k SKevent)
+kqueueWait kq arr timeout =
+  withTimespec timeout $ \ts,t =>
+    let p     := unsafeUnwrap arr
+        r # t := ffi
+                    (prim__kevent_wait
+                      (kqueueFd kq)
+                      p
+                      (cast n)
+                      (unwrap ts))
+                    t
+     in if r < 0
+          then E (inject $ fromNeg r) t
+          else R (cast r ** unsafeWrap p) t
+
+||| Remove `Nothing` entries from a list of optional polling results.
+|||
+||| Kqueue may report filters that do not represent file-descriptor
+||| readiness and therefore do not have a corresponding `PollPair`.
+pollPairs : List (Maybe PollPair) -> List PollPair
+pollPairs []              = []
+pollPairs (Nothing :: xs) = pollPairs xs
+pollPairs (Just x  :: xs) = x :: pollPairs xs
+
+||| Wait for kqueue events and decode file-descriptor readiness events into
+||| POSIX `PollPair`s.
+|||
+||| Read filters become `POLLIN`, write filters become `POLLOUT`, and
+||| relevant kqueue EOF/error flags are translated to `POLLHUP` and
+||| `POLLERR` respectively.
+|||
+||| Events generated by filters such as `EVFILT_SIGNAL`, `EVFILT_TIMER`,
+||| and `EVFILT_USER` are ignored by this file-polling conversion.
+export
+kqueueWaitVals :
+     {n : _}
+  -> Kqueuefd
+  -> CArrayIO n SKevent
+  -> Clock Duration
+  -> EPrim (List PollPair)
+kqueueWaitVals kq arr timeout t =
+  let R (k ** arr2) t := kqueueWait kq arr timeout t
+        | E x t => E x t
+      vs # t := structs [] arr2 pollPair k t
+   in R (pollPairs vs) t

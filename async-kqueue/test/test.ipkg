@@ -1,0 +1,12 @@
+package async-kqueue-test
+version = 0.1.0
+authors = "Matthew-Mosior"
+
+depends = async-test
+        , async-kqueue
+
+sourcedir = "src"
+
+executable = "async-kqueue-test"
+
+main = Main

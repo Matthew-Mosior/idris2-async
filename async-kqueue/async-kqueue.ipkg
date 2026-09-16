@@ -1,0 +1,19 @@
+package async-kqueue
+
+authors    = "Matthew Mosior"
+brief      = "A Kqueue-based event loop for asynchronous computations on BSD/MacOS"
+license    = "BSD-3 Clause"
+version    = 0.1.0
+sourcedir  = "src"
+depends    = base
+           , async-posix
+           , cptr
+           , elab-util
+           , posix
+           , ref1
+modules    = IO.Async.Loop.Kqueue
+           , System.BSD.Kqueue.Flags
+           , System.BSD.Kqueue.Struct
+           , System.BSD.Kqueue.Prim
+prebuild   = "make -C support"
+preinstall = "make -C support install"
