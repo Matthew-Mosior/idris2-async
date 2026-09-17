@@ -1,6 +1,6 @@
 IDRIS := idris2
 
-TARGET = kqueue-idris
+TARGET = async-kqueue-idris
 TARGET_VERSION ?= 0.1.0
 
 INSTALLDIR = `${IDRIS} --libdir`/async-kqueue-${TARGET_VERSION}
