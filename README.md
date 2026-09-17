@@ -394,8 +394,9 @@ the next bunch of computations start.
 
 This final sections only shows the `main` functions and a few utilities
 used to run the examples in this introduction. Currently, the event
-loop from `IO.Async.Loop.ThreadPool` is used to run this. This makes use of
-`epoll` internally, which is only available under Linux.
+loop from `IO.Async.Loop.ThreadPool` is used to run this. This can make use of
+either `epoll` (available under Linux) or `Kqueue` (available under BSD/MacOS)
+internally.
 
 ```idris
 covering
