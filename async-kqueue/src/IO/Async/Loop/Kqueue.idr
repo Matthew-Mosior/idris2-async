@@ -39,25 +39,20 @@ import System.Posix.Limits
 ||| State used for file-descriptor polling with `kqueue`.
 record Kqueue where
   constructor P
-
   ||| Number of file descriptors currently waiting to be polled.
   waiting : IORef Nat
-
   ||| Maximum number of files that can be opened.
   |||
   ||| This is initialized from `SC_OPEN_MAX` and is also used as the size
   ||| of the file-handle table and event buffer.
   maxFiles : Nat
-
   ||| File event handles indexed by file descriptor.
   |||
   ||| A registered descriptor has a callback installed at its descriptor
   ||| index. Unregistered descriptors contain `hdummy`.
   handles : IOArray maxFiles FileHandle
-
   ||| Native event buffer populated by `kevent(2)`.
   events : CArrayIO maxFiles SKevent
-
   ||| The kqueue descriptor used for registration and polling.
   kqueue : Kqueuefd
 
@@ -185,13 +180,10 @@ parameters (p         : Kqueue)
   unregister : Registration -> IO1 ()
   unregister (R False False) t =
     () # t
-
   unregister (R True False) t =
     e1ToF1 (ctl Del ReadFilter) t
-
   unregister (R False True) t =
     e1ToF1 (ctl Del WriteFilter) t
-
   unregister (R True True) t =
     let _ # t := e1ToF1 (ctl Del ReadFilter) t
      in e1ToF1 (ctl Del WriteFilter) t
@@ -205,23 +197,18 @@ parameters (p         : Kqueue)
   register : Registration -> E1 World [Errno] ()
   register (R False False) t =
     E (Here EINVAL) t
-
   register (R True False) t =
     ctl Add ReadFilter t
-
   register (R False True) t =
     ctl Add WriteFilter t
-
   register (R True True) t =
     case ctl Add ReadFilter t of
       E err t =>
         E err t
-
       R _ t =>
         case ctl Add WriteFilter t of
           R _ t =>
             R () t
-
           E err t =>
             -- Registration is transactional from the async poller's
             -- perspective. Roll back the read filter before returning
@@ -229,7 +216,6 @@ parameters (p         : Kqueue)
             case ctl Del ReadFilter t of
               R _ t =>
                 E err t
-
               E _ t =>
                 -- Preserve the original registration error.
                 E err t
@@ -291,30 +277,25 @@ parameters (p         : Kqueue)
     case tryNatToFin (cast fd.fd) of
       Nothing =>
         abrt (Left EINVAL) t
-
       Just v =>
         let reg := registration ev
          in case register reg t of
               -- Registration failed before the callback became active.
               E (Here err) t =>
                 abrt (Left err) t
-
               -- Registration succeeded. Install the callback and expose
               -- the cancellation hook.
               R _ t =>
                 let r # t :=
                       ref1 True t
-
                     _ # t :=
                       AC.set
                         p.handles
                         v
                         (\event => once r (act reg v event))
                         t
-
                     _ # t :=
                       Queue.inc p.waiting t
-
                  in once r (Kqueue.cleanup reg v) # t
 
 --------------------------------------------------------------------------------
@@ -357,7 +338,6 @@ kqueueApp
 kqueueApp {sigs} prog = do
   n <- asyncThreads
   app n sigs kqueuePoller cprog
-
   where
     cprog : Async Poll [] ()
     cprog =
