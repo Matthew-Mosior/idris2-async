@@ -3,13 +3,13 @@ IDRIS := idris2
 TARGET = kqueue-idris
 TARGET_VERSION ?= 0.1.0
 
-INSTALLDIR = `${IDRIS} --libdir`/kqueue-${TARGET_VERSION}
+INSTALLDIR = `${IDRIS} --libdir`/async-kqueue-${TARGET_VERSION}
 LIBDIR = "$(INSTALLDIR)/lib"
 
 LDFLAGS =
 CFLAGS = -O2 -g -Wall -Wextra -fPIC
 
-CC_VERSION := $(shell $(CC) --version)
+CC_VERSION = $(shell $(CC) --version)
 MACHINE := $(shell $(CC) -dumpmachine)
 
 ifneq (,$(findstring cygwin,$(MACHINE)))
@@ -32,9 +32,6 @@ else
 	SHLIB_SUFFIX := .so
 endif
 
-# kqueue is available on macOS and BSD systems.
-# No additional library is required: kqueue(2) and kevent(2)
-# are provided by the system C library.
 ifeq ($(OS),darwin)
 	CFLAGS +=
 else ifeq ($(OS),bsd)
@@ -58,10 +55,10 @@ all: $(TARGET)$(SHLIB_SUFFIX)
 $(TARGET)$(SHLIB_SUFFIX): $(OBJS)
 	$(CC) $(CFLAGS) -shared $(LDFLAGS) -o $@ $^
 
-%.o: %.c
-	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
-
 -include $(DEPS)
+
+%.d: %.c
+	@$(CPP) $(CFLAGS) $< -MM -MT $(@:.d=.o) > $@
 
 .PHONY: clean
 
@@ -74,6 +71,6 @@ cleandep: clean
 
 .PHONY: install
 
-install:
+install: $(TARGET)$(SHLIB_SUFFIX)
 	@if ! [ -d $(LIBDIR) ]; then mkdir -p $(LIBDIR); fi
 	install $(TARGET)$(SHLIB_SUFFIX) $(LIBDIR)
